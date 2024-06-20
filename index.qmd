@@ -1,0 +1,12 @@
+---
+title: "Classwork"
+execute:
+  echo: false
+---
+```{r}
+#| label: setup
+#| warning: false
+library(tidyverse)
+library(tidycensus)
+```
+
