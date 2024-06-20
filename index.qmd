@@ -8,5 +8,91 @@ execute:
 #| warning: false
 library(tidyverse)
 library(tidycensus)
+library(leaflet)
+library(sf)
+```
+```{r}
+# Define the variables of interest
+# The variable B15003_022E represents the number of people with a bachelor's degree
+variables <- c(bachelor_degree = "B15003_022E")
+
+# Get the data for Los Angeles County at the tract level
+la_bachelor_data <- get_acs(
+  geography = "tract",
+  variables = variables,
+  state = "CA",
+  county = "Los Angeles",
+  year = 2021,
+  survey = "acs5",
+  geometry = TRUE,  # Get geometries for spatial data
+  output = "wide",
+  progress = FALSE
+)
+
+# Get the total population for the education attainment variable
+la_population_data <- get_acs(
+  geography = "tract",
+  variables = c(total_population = "B15003_001E"),
+  state = "CA",
+  county = "Los Angeles",
+  year = 2021,
+  survey = "acs5",
+  geometry = TRUE,
+  output = "wide",
+  progress = FALSE
+)
+
+# Ensure the NAME column is retained
+la_bachelor_data <- la_bachelor_data %>%
+  select(GEOID, NAME, bachelor_degree, geometry)
+
+la_population_data <- la_population_data %>%
+  select(GEOID, total_population, geometry)
+
+# Merge the datasets
+#la_data <- left_join(la_bachelor_data, la_population_data, by = "GEOID")
+#la_data <- st_join(la_bachelor_data, la_population_data, by = "GEOID")
+la_data <- st_join(la_bachelor_data, la_population_data, join = st_intersects)
+
+# Calculate the percentage of people with bachelor's degrees
+la_data <- la_data %>%
+  mutate(
+    percentage_bachelor_degree = (bachelor_degree / total_population) * 100
+  )
+
+# Transform CRS to WGS84
+la_data <- st_transform(la_data, crs = 4326)
+
+# Create the leaflet map
+leaflet(data = la_data)%>%
+  addProviderTiles(providers$CartoDB.Positron)%>%
+  addPolygons(
+    fillColor = ~colorQuantile("YlOrRd", percentage_bachelor_degree)(percentage_bachelor_degree),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 3,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE
+    ),
+    label = ~paste0(NAME, ": ", round(percentage_bachelor_degree, 2), "%"),
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"
+    )
+  ) %>%
+  addLegend(
+    pal = colorQuantile("YlOrRd", NULL),
+    values = ~percentage_bachelor_degree,
+    opacity = 0.7,
+    title = "Percentage with Bachelor's Degree",
+    position = "bottomright"
+  )
 ```
 
